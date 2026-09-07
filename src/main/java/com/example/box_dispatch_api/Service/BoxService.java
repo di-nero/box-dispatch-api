@@ -7,7 +7,10 @@ import com.example.box_dispatch_api.DTO.LoadItemsRequest;
 import com.example.box_dispatch_api.Entity.Box;
 import com.example.box_dispatch_api.Entity.Item;
 import com.example.box_dispatch_api.Enum.BoxState;
+import com.example.box_dispatch_api.Exception.BatteryTooLowException;
 import com.example.box_dispatch_api.Exception.BoxNotFoundException;
+import com.example.box_dispatch_api.Exception.InvalidBoxStateException;
+import com.example.box_dispatch_api.Exception.WeightLimitExceededException;
 import com.example.box_dispatch_api.Repository.BoxRepository;
 import com.example.box_dispatch_api.Repository.ItemRepository;
 import com.example.box_dispatch_api.Util.TxrefGenerator;
@@ -56,11 +59,11 @@ public class BoxService {
         Box box = boxRepository.findByTxref(txref).orElseThrow(() -> new BoxNotFoundException("Box not found!"));
 
         if (box.getBatteryCapacity() < 25) {
-            throw new RuntimeException("Box battery is below 25%");
+            throw new BatteryTooLowException("Box battery is below 25%");
         }
 
         if (box.getState().equals(BoxState.DELIVERED) || box.getState().equals(BoxState.DELIVERING) || box.getState().equals(BoxState.RETURNING)){
-            throw new RuntimeException("Box cannot be loaded in it current state");
+            throw new InvalidBoxStateException("Box cannot be loaded in it current state");
         }
 
         int newWeight = 0;
@@ -76,7 +79,7 @@ public class BoxService {
         }
 
         if (existingWeight + newWeight > box.getWeightLimit()) {
-            throw new RuntimeException("Box weight limit exceeded");
+            throw new WeightLimitExceededException("Box weight limit exceeded");
         }
 
         for (ItemRequest itemRequest : request.getItems()) {
