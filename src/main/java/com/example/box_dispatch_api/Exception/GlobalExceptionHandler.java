@@ -43,9 +43,9 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(WeightLimitExceededException.class)
     public ResponseEntity<ErrorResponse> handleWeightLimitExceeded(WeightLimitExceededException ex) {
         return ResponseEntity
-                .status(HttpStatus.NOT_FOUND)
+                .status(HttpStatus.BAD_REQUEST)
                 .body(ErrorResponse.builder()
-                        .status(HttpStatus.NOT_FOUND.value())
+                        .status(HttpStatus.BAD_REQUEST.value())
                         .message(ex.getMessage())
                         .build());
     }

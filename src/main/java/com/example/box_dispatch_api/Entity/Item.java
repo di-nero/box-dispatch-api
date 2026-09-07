@@ -1,5 +1,6 @@
 package com.example.box_dispatch_api.Entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -24,5 +25,6 @@ public class Item {
     private String code;
 
     @ManyToOne(fetch = FetchType.LAZY)
+    @JsonIgnore
     private Box box;
 }
