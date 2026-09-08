@@ -37,7 +37,13 @@ Items are added to dispatch boxes, while the boxes have different states represe
 * Swagger / OpenAPI
 * Lombok
 
-## API Endpoints
+## Live API
+
+The API is deployed and available at:
+
+https://box-dispatch-api.onrender.com
+
+You can use the live API directly with the cURL examples below.
 
 ### 1. Create a Box
 
@@ -55,6 +61,16 @@ Creates a new dispatch box.
 
 The `weightLimit` must not exceed 500g.
 
+#### cURL
+
+```bash
+curl -X POST https://box-dispatch-api.onrender.com/boxes \
+  -H "Content-Type: application/json" \
+  -d '{
+    "weightLimit": 500
+  }'
+```
+
 #### Response
 
 ```json
@@ -69,7 +85,6 @@ The `weightLimit` must not exceed 500g.
 
 A new box is automatically assigned a unique `txref`, starts with 100% battery, and has an initial state of `IDLE`.
 
----
 
 ### 2. Load Items Into a Box
 
@@ -94,6 +109,33 @@ Loads one or more items into a specified box.
 The `txref` identifies the box to load.
 
 If the request is successful, the box state changes to `LOADED`.
+#### cURL
+
+```bash
+curl https://box-dispatch-api.onrender.com/boxes/BOX-A82F91C3/items \
+  -H "Content-Type: application/json" \
+  -d '{
+    "items": [
+      {
+        "name": "Phone-1",
+        "weight": 100,
+        "code": "PHONE_001"
+      }
+    ]
+  }'
+```
+#### Response
+
+```json
+{
+  "id": "generated-uuid",
+  "txref": "BOX-A82F91C3",
+  "weightLimit": 500,
+  "batteryCapacity": 100,
+  "state": "LOADED"
+}
+```
+---
 
 ---
 
@@ -102,7 +144,26 @@ If the request is successful, the box state changes to `LOADED`.
 **GET** `/boxes/{txref}/items`
 
 Returns all items currently loaded in the specified box.
+#### cURL
 
+```bash
+curl https://box-dispatch-api.onrender.com/boxes/BOX-A82F91C3/items
+```
+
+#### Response
+
+```json
+[
+  {
+    "id": "generated-uuid",
+    "name": "Phone-1",
+    "weight": 100,
+    "code": "PHONE_001"
+  }
+]
+```
+
+---
 ---
 
 ### 4. Get Available Boxes
@@ -116,6 +177,27 @@ A box is considered available when:
 * Its battery level is at least 25%.
 * Its state is `IDLE`, `LOADING`, or `LOADED`.
 * Its current weight is below its weight limit.
+#### cURL
+
+```bash
+curl https://box-dispatch-api.onrender.com/boxes/available
+```
+
+#### Response
+
+```json
+[
+  {
+    "id": "generated-uuid",
+    "txref": "BOX-A82F91C3",
+    "weightLimit": 500,
+    "batteryCapacity": 100,
+    "state": "IDLE"
+  }
+]
+```
+
+---
 
 ---
 
@@ -130,6 +212,18 @@ Example response:
 ```text
 100
 ```
+#### cURL
+
+```bash
+curl https://box-dispatch-api.onrender.com/boxes/BOX-A82F91C3/battery
+```
+
+#### Response
+
+```text
+100
+```
+
 
 ## Business Rules
 
@@ -228,12 +322,18 @@ The application uses PostgreSQL as its database.
 
 Default configuration:
 
-* **Database:** `box_dispatcher`
+* **Database:** `box_dispatch`
 * **Username:** `postgres`
 * **PostgreSQL Port:** `5432`
 * **Application Port:** `8080`
 
-Configure these values in `application.yml` or `application.properties` before running the application.
+Configure the database connection using the following environment variables:
+
+```
+DB_URL=jdbc:postgresql://<host>:5432/<dbname>
+DB_USERNAME=<username>
+DB_PASSWORD=<password>
+```
 
 ### Running the Application
 
@@ -299,10 +399,16 @@ You can also run the tests directly from IntelliJ IDEA using the **Run ▶** but
 
 The API is documented using Swagger/OpenAPI.
 
-After starting the application, Swagger UI is available at:
+After starting the application locally, Swagger UI is available at:
 
 ```text
 http://localhost:8080/swagger-ui/index.html
+```
+
+The deployed Swagger UI is also available at:
+
+```text
+https://box-dispatch-api.onrender.com/swagger-ui/index.html
 ```
 
 Swagger UI provides an interactive interface for viewing the available endpoints, request/response formats, and testing the API directly.
@@ -323,7 +429,7 @@ src/
         service/
         util/
     resources/
-      application.yml
+      application.yaml
   test/
     java/
       com.example.box_dispatch_api/
