@@ -1,12 +1,12 @@
 package com.example.box_dispatch_api;
 
-import com.example.box_dispatch_api.DTO.ItemRequest;
-import com.example.box_dispatch_api.DTO.LoadItemsRequest;
-import com.example.box_dispatch_api.Entity.Box;
-import com.example.box_dispatch_api.Entity.Item;
-import com.example.box_dispatch_api.Enum.BoxState;
-import com.example.box_dispatch_api.Repository.BoxRepository;
-import com.example.box_dispatch_api.Repository.ItemRepository;
+import com.example.box_dispatch_api.dto.ItemRequest;
+import com.example.box_dispatch_api.dto.LoadItemsRequest;
+import com.example.box_dispatch_api.entity.Box;
+import com.example.box_dispatch_api.entity.Item;
+import com.example.box_dispatch_api.enums.BoxState;
+import com.example.box_dispatch_api.repository.BoxRepository;
+import com.example.box_dispatch_api.repository.ItemRepository;
 import tools.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -29,7 +29,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 @Testcontainers
 class BoxDispatchE2ETest {
-
     @Container
     static PostgreSQLContainer<?> postgres =
             new PostgreSQLContainer<>("postgres:17")
@@ -40,7 +39,6 @@ class BoxDispatchE2ETest {
     @org.springframework.test.context.DynamicPropertySource
     static void configureProperties(
             org.springframework.test.context.DynamicPropertyRegistry registry) {
-
         registry.add("spring.datasource.url", postgres::getJdbcUrl);
         registry.add("spring.datasource.username", postgres::getUsername);
         registry.add("spring.datasource.password", postgres::getPassword);
@@ -65,7 +63,6 @@ class BoxDispatchE2ETest {
 
     @Test
     void shouldCreateBox() throws Exception {
-
         String request = """
                 {
                     "weightLimit": 500
@@ -84,7 +81,6 @@ class BoxDispatchE2ETest {
 
     @Test
     void shouldLoadBoxWithItems() throws Exception {
-
         Box box = createBox();
 
         ItemRequest item = new ItemRequest();
@@ -105,7 +101,6 @@ class BoxDispatchE2ETest {
 
     @Test
     void shouldGetBoxItems() throws Exception {
-
         Box box = createBox();
 
         Item item = Item.builder()
@@ -126,7 +121,6 @@ class BoxDispatchE2ETest {
 
     @Test
     void shouldGetBatteryLevel() throws Exception {
-
         Box box = createBox();
 
         mockMvc.perform(get("/boxes/{txref}/battery", box.getTxref()))
@@ -136,19 +130,17 @@ class BoxDispatchE2ETest {
 
     @Test
     void shouldReturnAvailableBoxes() throws Exception {
-
         Box box = createBox();
 
         mockMvc.perform(get("/boxes/available"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].txref").value(box.getTxref()))
-                .andExpect(jsonPath("$[0].batteryCapacity").value(100))
-                .andExpect(jsonPath("$[0].state").value("IDLE"));
+                .andExpect(jsonPath("$.content[0].txref").value(box.getTxref()))
+                .andExpect(jsonPath("$.content[0].batteryCapacity").value(100))
+                .andExpect(jsonPath("$.content[0].state").value("IDLE"));
     }
 
     @Test
     void shouldReturn404WhenBoxDoesNotExist() throws Exception {
-
         mockMvc.perform(get("/boxes/BOX-NOTFOUND/battery"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.status").value(404))
@@ -157,7 +149,6 @@ class BoxDispatchE2ETest {
 
     @Test
     void shouldRejectInvalidItemName() throws Exception {
-
         Box box = createBox();
 
         String request = """
@@ -181,7 +172,6 @@ class BoxDispatchE2ETest {
 
     @Test
     void shouldRejectItemWhenWeightLimitExceeded() throws Exception {
-
         Box box = createBox();
 
         Item existingItem = Item.builder()
@@ -214,8 +204,81 @@ class BoxDispatchE2ETest {
                         .value("Box weight limit exceeded"));
     }
 
-    private Box createBox() {
+    @Test
+    void shouldRejectMissingItemsField() throws Exception {
+        Box box = createBox();
 
+        mockMvc.perform(post("/boxes/{txref}/items", box.getTxref())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400));
+    }
+
+    @Test
+    void shouldRejectEmptyItemsList() throws Exception {
+        Box box = createBox();
+
+        mockMvc.perform(post("/boxes/{txref}/items", box.getTxref())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"items\": []}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400));
+    }
+
+    @Test
+    void shouldReturn400WhenBatteryTooLow() throws Exception {
+        Box box = Box.builder()
+                .txref("BOX-TEST-" + UUID.randomUUID().toString().substring(0, 6).toUpperCase())
+                .weightLimit(500)
+                .batteryCapacity(10)
+                .state(BoxState.IDLE)
+                .build();
+        boxRepository.save(box);
+
+        ItemRequest item = new ItemRequest();
+        item.setName("Phone-1");
+        item.setWeight(100);
+        item.setCode("PHONE_001");
+
+        LoadItemsRequest request = new LoadItemsRequest();
+        request.setItems(List.of(item));
+
+        mockMvc.perform(post("/boxes/{txref}/items", box.getTxref())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.message").value("Box battery is below 25%"));
+    }
+
+    @Test
+    void shouldReturn400WhenBoxStateInvalidForLoading() throws Exception {
+        Box box = Box.builder()
+                .txref("BOX-TEST-" + UUID.randomUUID().toString().substring(0, 6).toUpperCase())
+                .weightLimit(500)
+                .batteryCapacity(100)
+                .state(BoxState.DELIVERING)
+                .build();
+        boxRepository.save(box);
+
+        ItemRequest item = new ItemRequest();
+        item.setName("Phone-1");
+        item.setWeight(100);
+        item.setCode("PHONE_001");
+
+        LoadItemsRequest request = new LoadItemsRequest();
+        request.setItems(List.of(item));
+
+        mockMvc.perform(post("/boxes/{txref}/items", box.getTxref())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.message").value("Box cannot be loaded in it current state"));
+    }
+
+    private Box createBox() {
         Box box = Box.builder()
                 .txref("BOX-TEST-" + UUID.randomUUID().toString().substring(0, 6).toUpperCase())
                 .weightLimit(500)

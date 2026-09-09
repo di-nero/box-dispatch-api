@@ -1,4 +1,4 @@
-package com.example.box_dispatch_api.DTO;
+package com.example.box_dispatch_api.dto;
 
 
 import jakarta.validation.constraints.Max;
@@ -11,7 +11,7 @@ import lombok.*;
 @AllArgsConstructor
 @Builder
 public class CreateBoxRequest {
-
+    @Min(1)
     @Max(500)
     private int weightLimit;
 

@@ -112,7 +112,7 @@ If the request is successful, the box state changes to `LOADED`.
 #### cURL
 
 ```bash
-curl https://box-dispatch-api.onrender.com/boxes/BOX-A82F91C3/items \
+curl -X POST https://box-dispatch-api.onrender.com/boxes/BOX-A82F91C3/items \
   -H "Content-Type: application/json" \
   -d '{
     "items": [
@@ -168,9 +168,9 @@ curl https://box-dispatch-api.onrender.com/boxes/BOX-A82F91C3/items
 
 ### 4. Get Available Boxes
 
-**GET** `/boxes/available`
+**GET** `/boxes/available?page=0&size=20`
 
-Returns boxes that are currently available for loading.
+Returns a paginated list of boxes that are currently available for loading. `page` and `size` are optional (defaults: `page=0`, `size=20`).
 
 A box is considered available when:
 
@@ -186,16 +186,26 @@ curl https://box-dispatch-api.onrender.com/boxes/available
 #### Response
 
 ```json
-[
-  {
-    "id": "generated-uuid",
-    "txref": "BOX-A82F91C3",
-    "weightLimit": 500,
-    "batteryCapacity": 100,
-    "state": "IDLE"
+{
+  "content": [
+    {
+      "id": "generated-uuid",
+      "txref": "BOX-A82F91C3",
+      "weightLimit": 500,
+      "batteryCapacity": 100,
+      "state": "IDLE"
+    }
+  ],
+  "page": {
+    "size": 20,
+    "number": 0,
+    "totalElements": 1,
+    "totalPages": 1
   }
-]
+}
 ```
+
+Note: `totalElements`/`totalPages` reflect boxes matching the battery/state criteria; boxes additionally excluded for being weight-full are filtered out of `content` but may still be counted here.
 
 ---
 
@@ -320,6 +330,8 @@ Before running the application, make sure you have the following installed:
 
 The application uses PostgreSQL as its database.
 
+`src/main/resources/application.yaml` is committed to the repo and reads every setting from an environment variable, falling back to a sensible local default if the variable isn't set - so the app runs out of the box against a local Postgres instance with no configuration required.
+
 Default configuration:
 
 * **Database:** `box_dispatch`
@@ -327,12 +339,15 @@ Default configuration:
 * **PostgreSQL Port:** `5432`
 * **Application Port:** `8080`
 
-Configure the database connection using the following environment variables:
+To override any of these, copy `.env.example` to `.env` and adjust values, or export the variables directly before running the app:
 
 ```
 DB_URL=jdbc:postgresql://<host>:5432/<dbname>
 DB_USERNAME=<username>
 DB_PASSWORD=<password>
+JPA_DDL_AUTO=update
+JPA_SHOW_SQL=true
+SERVER_PORT=8080
 ```
 
 ### Running the Application
@@ -471,17 +486,15 @@ The following assumptions and implementation decisions were made where the asses
 * Delivery and return operations are outside the scope of this assessment.
 * Battery consumption is outside the scope because no battery consumption formula or delivery operation was specified.
 * Available-box responses do not include the items currently loaded in each box.
-* Authentication and authorization were intentionally not implemented because they were not required by the assessment.
+* Authentication, authorization, and caching (e.g. Redis) were intentionally not implemented because they were not required by the assessment and add no value at this scope - there is nothing here that benefits from caching, and no user/session concept to authenticate.
+* Loading a box is wrapped in a transaction and takes a pessimistic row lock on the box for the duration of the request, so concurrent load requests against the same box cannot both pass the weight-limit check and jointly overload it.
 
 ## Future Improvements
 
 If this project were extended beyond the assessment, the following features could be added:
 
 * Authentication and authorization
-* API pagination for large box and item lists
 * Battery consumption tracking
-* Delivery and return operations
-* More comprehensive validation
-* Transaction management for loading items
+* Delivery and return operations (which would exercise the `DELIVERING`/`DELIVERED`/`RETURNING` states - currently unreachable via the API since no endpoint transitions a box into them)
 * More detailed API error responses
 * Application monitoring and logging

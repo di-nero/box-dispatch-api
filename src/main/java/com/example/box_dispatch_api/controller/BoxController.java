@@ -1,14 +1,17 @@
-package com.example.box_dispatch_api.Controller;
+package com.example.box_dispatch_api.controller;
 
-import com.example.box_dispatch_api.DTO.BoxResponse;
-import com.example.box_dispatch_api.DTO.CreateBoxRequest;
-import com.example.box_dispatch_api.DTO.LoadItemsRequest;
-import com.example.box_dispatch_api.Entity.Item;
-import com.example.box_dispatch_api.Service.BoxService;
+import com.example.box_dispatch_api.dto.BoxResponse;
+import com.example.box_dispatch_api.dto.CreateBoxRequest;
+import com.example.box_dispatch_api.dto.ItemResponse;
+import com.example.box_dispatch_api.dto.LoadItemsRequest;
+import com.example.box_dispatch_api.service.BoxService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -20,7 +23,6 @@ import java.util.List;
 @RequiredArgsConstructor
 @Tag(name = "Box Management", description = "APIs for managing dispatch boxes and their items")
 public class BoxController {
-
     private final BoxService boxService;
 
     @Operation(summary = "Create a new box")
@@ -29,16 +31,17 @@ public class BoxController {
         return ResponseEntity.status(HttpStatus.CREATED).body(boxService.createBox(request));
     }
 
-    @Operation(summary = "Get items in a box a box")
+    @Operation(summary = "Get items in a box")
     @GetMapping("/{txref}/items")
-    public ResponseEntity<List<Item>> getBoxItems(@PathVariable String txref) {
+    public ResponseEntity<List<ItemResponse>> getBoxItems(@PathVariable String txref) {
         return ResponseEntity.ok(boxService.getBoxItems(txref));
     }
 
     @Operation(summary = "Get available boxes")
     @GetMapping("/available")
-    public ResponseEntity<List<BoxResponse>> getAvailableBoxes() {
-        return ResponseEntity.ok(boxService.getAvailableBoxes());
+    public ResponseEntity<Page<BoxResponse>> getAvailableBoxes(
+            @PageableDefault(size = 20) Pageable pageable) {
+        return ResponseEntity.ok(boxService.getAvailableBoxes(pageable));
     }
 
     @Operation(summary = "Get a box battery level")
@@ -50,7 +53,6 @@ public class BoxController {
     @Operation(summary = "Load items into a box")
     @PostMapping("/{txref}/items")
     public ResponseEntity<BoxResponse> loadBox(@PathVariable String txref, @Valid @RequestBody LoadItemsRequest request) {
-
         return ResponseEntity.ok(boxService.loadBox(txref, request));
     }
 }

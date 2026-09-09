@@ -1,38 +1,45 @@
-package com.example.box_dispatch_api.Service;
+package com.example.box_dispatch_api.service;
 
-import com.example.box_dispatch_api.DTO.BoxResponse;
-import com.example.box_dispatch_api.DTO.CreateBoxRequest;
-import com.example.box_dispatch_api.DTO.ItemRequest;
-import com.example.box_dispatch_api.DTO.LoadItemsRequest;
-import com.example.box_dispatch_api.Entity.Box;
-import com.example.box_dispatch_api.Entity.Item;
-import com.example.box_dispatch_api.Enum.BoxState;
-import com.example.box_dispatch_api.Exception.BatteryTooLowException;
-import com.example.box_dispatch_api.Exception.BoxNotFoundException;
-import com.example.box_dispatch_api.Exception.InvalidBoxStateException;
-import com.example.box_dispatch_api.Exception.WeightLimitExceededException;
-import com.example.box_dispatch_api.Repository.BoxRepository;
-import com.example.box_dispatch_api.Repository.ItemRepository;
-import com.example.box_dispatch_api.Util.TxrefGenerator;
+import com.example.box_dispatch_api.dto.BoxResponse;
+import com.example.box_dispatch_api.dto.CreateBoxRequest;
+import com.example.box_dispatch_api.dto.ItemRequest;
+import com.example.box_dispatch_api.dto.ItemResponse;
+import com.example.box_dispatch_api.dto.LoadItemsRequest;
+import com.example.box_dispatch_api.entity.Box;
+import com.example.box_dispatch_api.entity.Item;
+import com.example.box_dispatch_api.enums.BoxState;
+import com.example.box_dispatch_api.exception.BatteryTooLowException;
+import com.example.box_dispatch_api.exception.BoxNotFoundException;
+import com.example.box_dispatch_api.exception.InvalidBoxStateException;
+import com.example.box_dispatch_api.exception.WeightLimitExceededException;
+import com.example.box_dispatch_api.repository.BoxRepository;
+import com.example.box_dispatch_api.repository.BoxWeightTotal;
+import com.example.box_dispatch_api.repository.ItemRepository;
+import com.example.box_dispatch_api.util.TxrefGenerator;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class BoxServiceTest {
-
     @Mock
     private ItemRepository itemRepository;
 
@@ -55,21 +62,17 @@ class BoxServiceTest {
                 .weightLimit(500)
                 .batteryCapacity(100)
                 .state(BoxState.IDLE)
-                .item(new ArrayList<>())
+                .items(new ArrayList<>())
                 .build();
     }
 
     @Test
     void shouldCreateBoxSuccessfully() {
-
         CreateBoxRequest request = new CreateBoxRequest();
         request.setWeightLimit(500);
 
         when(txrefGenerator.generateTxref())
                 .thenReturn("BOX-12345678");
-
-        when(boxRepository.existsByTxref("BOX-12345678"))
-                .thenReturn(false);
 
         when(boxRepository.save(any(Box.class)))
                 .thenReturn(box);
@@ -87,10 +90,10 @@ class BoxServiceTest {
 
     @Test
     void shouldThrowExceptionWhenBoxDoesNotExist() {
-
         LoadItemsRequest request = new LoadItemsRequest();
+        request.setItems(List.of());
 
-        when(boxRepository.findByTxref("BOX-NOTFOUND"))
+        when(boxRepository.findByTxrefForUpdate("BOX-NOTFOUND"))
                 .thenReturn(Optional.empty());
 
         assertThrows(
@@ -101,12 +104,12 @@ class BoxServiceTest {
 
     @Test
     void shouldThrowExceptionWhenBatteryIsTooLow() {
-
         box.setBatteryCapacity(20);
 
         LoadItemsRequest request = new LoadItemsRequest();
+        request.setItems(List.of());
 
-        when(boxRepository.findByTxref(box.getTxref()))
+        when(boxRepository.findByTxrefForUpdate(box.getTxref()))
                 .thenReturn(Optional.of(box));
 
         assertThrows(
@@ -117,12 +120,12 @@ class BoxServiceTest {
 
     @Test
     void shouldThrowExceptionWhenBoxStateIsInvalid() {
-
         box.setState(BoxState.DELIVERING);
 
         LoadItemsRequest request = new LoadItemsRequest();
+        request.setItems(List.of());
 
-        when(boxRepository.findByTxref(box.getTxref()))
+        when(boxRepository.findByTxrefForUpdate(box.getTxref()))
                 .thenReturn(Optional.of(box));
 
         assertThrows(
@@ -133,6 +136,16 @@ class BoxServiceTest {
 
     @Test
     void shouldThrowExceptionWhenWeightLimitIsExceeded() {
+        ItemRequest newItem = new ItemRequest();
+        newItem.setName("Phone-1");
+        newItem.setWeight(100);
+        newItem.setCode("PHONE_001");
+
+        LoadItemsRequest request = new LoadItemsRequest();
+        request.setItems(List.of(newItem));
+
+        when(boxRepository.findByTxrefForUpdate(box.getTxref()))
+                .thenReturn(Optional.of(box));
 
         Item existingItem = Item.builder()
                 .id(UUID.randomUUID())
@@ -142,18 +155,8 @@ class BoxServiceTest {
                 .box(box)
                 .build();
 
-        box.setItem(List.of(existingItem));
-
-        ItemRequest newItem = new ItemRequest();
-        newItem.setName("Phone-1");
-        newItem.setWeight(100);
-        newItem.setCode("PHONE_001");
-
-        LoadItemsRequest request = new LoadItemsRequest();
-        request.setItems(List.of(newItem));
-
-        when(boxRepository.findByTxref(box.getTxref()))
-                .thenReturn(Optional.of(box));
+        when(itemRepository.findByBox(box))
+                .thenReturn(List.of(existingItem));
 
         assertThrows(
                 WeightLimitExceededException.class,
@@ -163,7 +166,6 @@ class BoxServiceTest {
 
     @Test
     void shouldLoadBoxSuccessfully() {
-
         ItemRequest itemRequest = new ItemRequest();
         itemRequest.setName("Phone-1");
         itemRequest.setWeight(100);
@@ -172,10 +174,13 @@ class BoxServiceTest {
         LoadItemsRequest request = new LoadItemsRequest();
         request.setItems(List.of(itemRequest));
 
-        when(boxRepository.findByTxref(box.getTxref()))
+        when(boxRepository.findByTxrefForUpdate(box.getTxref()))
                 .thenReturn(Optional.of(box));
 
-        when(itemRepository.save(any(Item.class)))
+        when(itemRepository.findByBox(box))
+                .thenReturn(List.of());
+
+        when(itemRepository.saveAll(anyList()))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
         when(boxRepository.save(any(Box.class)))
@@ -188,13 +193,12 @@ class BoxServiceTest {
         assertEquals(BoxState.LOADED, response.getState());
         assertEquals(box.getTxref(), response.getTxref());
 
-        verify(itemRepository).save(any(Item.class));
+        verify(itemRepository).saveAll(anyList());
         verify(boxRepository).save(box);
     }
 
     @Test
     void shouldReturnBoxItems() {
-
         Item item = Item.builder()
                 .id(UUID.randomUUID())
                 .name("Phone-1")
@@ -209,7 +213,7 @@ class BoxServiceTest {
         when(itemRepository.findByBox(box))
                 .thenReturn(List.of(item));
 
-        List<Item> result =
+        List<ItemResponse> result =
                 boxService.getBoxItems(box.getTxref());
 
         assertEquals(1, result.size());
@@ -220,7 +224,6 @@ class BoxServiceTest {
 
     @Test
     void shouldReturnBatteryLevel() {
-
         when(boxRepository.findByTxref(box.getTxref()))
                 .thenReturn(Optional.of(box));
 
@@ -232,7 +235,6 @@ class BoxServiceTest {
 
     @Test
     void shouldThrowExceptionWhenGettingBatteryForUnknownBox() {
-
         when(boxRepository.findByTxref("BOX-NOTFOUND"))
                 .thenReturn(Optional.empty());
 
@@ -244,28 +246,44 @@ class BoxServiceTest {
 
     @Test
     void shouldReturnAvailableBoxes() {
+        Pageable pageable = PageRequest.of(0, 20);
 
-        when(boxRepository.findAll())
-                .thenReturn(List.of(box));
+        when(boxRepository.findByBatteryCapacityGreaterThanEqualAndStateIn(
+                        25, Set.of(BoxState.IDLE, BoxState.LOADING, BoxState.LOADED), pageable))
+                .thenReturn(new PageImpl<>(List.of(box), pageable, 1));
 
-        List<BoxResponse> result =
-                boxService.getAvailableBoxes();
+        when(itemRepository.sumWeightByBoxIds(List.of(box.getId())))
+                .thenReturn(List.of());
 
-        assertEquals(1, result.size());
-        assertEquals(box.getTxref(), result.get(0).getTxref());
+        Page<BoxResponse> result = boxService.getAvailableBoxes(pageable);
+
+        assertEquals(1, result.getContent().size());
+        assertEquals(box.getTxref(), result.getContent().get(0).getTxref());
     }
 
     @Test
-    void shouldNotReturnBoxWithLowBattery() {
+    void shouldExcludeFullBoxFromAvailableBoxes() {
+        Pageable pageable = PageRequest.of(0, 20);
 
-        box.setBatteryCapacity(20);
+        when(boxRepository.findByBatteryCapacityGreaterThanEqualAndStateIn(
+                        25, Set.of(BoxState.IDLE, BoxState.LOADING, BoxState.LOADED), pageable))
+                .thenReturn(new PageImpl<>(List.of(box), pageable, 1));
 
-        when(boxRepository.findAll())
-                .thenReturn(List.of(box));
+        BoxWeightTotal fullWeight = new BoxWeightTotal() {
+            public UUID getBoxId() {
+                return box.getId();
+            }
 
-        List<BoxResponse> result =
-                boxService.getAvailableBoxes();
+            public int getTotalWeight() {
+                return box.getWeightLimit();
+            }
+        };
 
-        assertTrue(result.isEmpty());
+        when(itemRepository.sumWeightByBoxIds(List.of(box.getId())))
+                .thenReturn(List.of(fullWeight));
+
+        Page<BoxResponse> result = boxService.getAvailableBoxes(pageable);
+
+        assertTrue(result.getContent().isEmpty());
     }
 }

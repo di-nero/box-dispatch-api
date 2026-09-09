@@ -1,4 +1,4 @@
-package com.example.box_dispatch_api.DTO;
+package com.example.box_dispatch_api.dto;
 
 
 import jakarta.validation.constraints.Min;
@@ -9,7 +9,6 @@ import lombok.Setter;
 @Getter
 @Setter
 public class ItemRequest {
-
     @Pattern(regexp = "^[a-zA-Z0-9_-]+$")
     private String name;
 

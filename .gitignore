@@ -34,4 +34,4 @@ build/
 src/main/resources/application.yaml
 .env
 app.jar
-output.log
+.claude/
